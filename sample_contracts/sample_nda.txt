@@ -1,0 +1,45 @@
+MUTUAL NON-DISCLOSURE AGREEMENT
+
+This Non-Disclosure Agreement ("NDA") is entered into as of the date last signed below between MegaCorp Industries LLC ("Disclosing Party") and the undersigned ("Receiving Party").
+
+1. DEFINITION OF CONFIDENTIAL INFORMATION
+"Confidential Information" means ABSOLUTELY EVERYTHING disclosed by Disclosing Party to Receiving Party in any form, including information that is publicly available, information the Receiving Party already knew, information independently developed by Receiving Party, and information received from third parties. There are NO exceptions to this definition.
+
+2. OBLIGATIONS OF RECEIVING PARTY
+Receiving Party shall:
+(a) Never disclose any Confidential Information to any person under any circumstances;
+(b) Not use Confidential Information for any purpose whatsoever, including the purpose for which it was disclosed;
+(c) Maintain secrecy using the highest possible standard of care, not merely reasonable care;
+(d) Immediately notify Disclosing Party of any unauthorized disclosure and pay damages assessed by Disclosing Party;
+(e) Upon request, destroy or return all Confidential Information AND any materials derived from it, including Receiving Party's own independent work product.
+
+3. DURATION
+This Agreement and all obligations herein shall remain in full force and effect FOREVER with no expiration date. Receiving Party's obligations survive termination of any business relationship and continue for the lifetime of Receiving Party.
+
+4. ONE-SIDED DISCLOSURE
+Despite the title "Mutual," this Agreement imposes confidentiality obligations SOLELY on the Receiving Party. Disclosing Party has no corresponding obligations and may freely disclose, use, or commercialize any information shared by Receiving Party.
+
+5. INJUNCTIVE RELIEF
+Receiving Party agrees that any breach, actual or threatened, shall entitle Disclosing Party to immediate injunctive relief without bond and without proof of actual damages. Receiving Party waives any right to oppose such relief.
+
+6. LIQUIDATED DAMAGES
+Each instance of unauthorized disclosure shall result in liquidated damages of $1,000,000 regardless of actual damages suffered. Parties agree this is a reasonable estimate of harm.
+
+7. SCOPE OF PROHIBITED USE
+Receiving Party may not use Confidential Information to:
+(a) Conduct competing research;
+(b) File patents on independently developed inventions;
+(c) Publish academic research;
+(d) Comply with government subpoenas or court orders without prior written consent from Disclosing Party;
+(e) Seek legal advice from an attorney about this Agreement.
+
+8. GOVERNING LAW AND JURISDICTION
+This Agreement is governed exclusively by the laws of Delaware. All disputes must be brought in Delaware courts. Receiving Party consents to personal jurisdiction and waives any objection to venue.
+
+9. ASSIGNMENT
+Disclosing Party may assign this Agreement without Receiving Party's consent. Receiving Party may not assign any rights hereunder.
+
+10. ENTIRE AGREEMENT
+This Agreement supersedes all prior understandings. No modification is valid unless signed by Disclosing Party only.
+
+Receiving Party Signature: _________________ Date: _____________
