@@ -56,7 +56,10 @@ def sanitize_filename(filename: str) -> str:
     """
     if not isinstance(filename, str):
         raise ValueError("Filename must be a string.")
-    safe = re.sub(r"[^\w.\-]", "_", filename)
+    # Remove path separators and collapse consecutive dots
+    safe = re.sub(r"[/\\]", "_", filename)
+    safe = re.sub(r"\.{2,}", "_", safe)
+    safe = re.sub(r"[^\w.\-]", "_", safe)
     safe = safe.lstrip(".")
     safe = safe[:MAX_FILENAME_LENGTH]
     if not safe:
