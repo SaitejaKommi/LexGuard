@@ -122,6 +122,7 @@ def analyze():
             risk_score=pipeline_result["overall_risk_score"],
             clauses=pipeline_result["clauses"],
             summary=pipeline_result["summary"],
+            contract_type=pipeline_result.get("contract_type", "Legal Agreement"),
             raw_text_snippet=doc_text[:500],
         )
         firebase_service.backup_analysis_to_firestore(
@@ -144,9 +145,26 @@ def analyze():
         "page_count": parsed["page_count"],
         "char_count": parsed["char_count"],
         "overall_risk_score": pipeline_result["overall_risk_score"],
+        "risk_level": _score_to_level(pipeline_result["overall_risk_score"]),
+        "contract_type": pipeline_result.get("contract_type", "Legal Agreement"),
         "risk_distribution": pipeline_result["risk_distribution"],
         "clauses": pipeline_result["clauses"],
         "negotiation_recommendations": pipeline_result["negotiation_recommendations"],
+        "negotiation_priorities": pipeline_result.get("negotiation_priorities", []),
+        "red_flags": pipeline_result.get("red_flags", []),
         "summary": pipeline_result["summary"],
         "cached": False,
     }), 200
+
+
+def _score_to_level(score: int) -> str:
+    """Convert numeric risk score to level label."""
+    if score >= 80:
+        return "CRITICAL"
+    if score >= 60:
+        return "HIGH"
+    if score >= 40:
+        return "MEDIUM"
+    if score >= 20:
+        return "LOW"
+    return "SAFE"

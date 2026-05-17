@@ -33,6 +33,8 @@ def _register_blueprints(app: Flask) -> None:
     from .routes.tts import tts_bp
     from .routes.history import history_bp
     from .routes.health import health_bp
+    from .routes.negotiate import negotiate_bp
+    from .routes.glossary import glossary_bp
 
     app.register_blueprint(analyze_bp)
     app.register_blueprint(chat_bp)
@@ -42,6 +44,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(tts_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(health_bp)
+    app.register_blueprint(negotiate_bp)
+    app.register_blueprint(glossary_bp)
 
 
 def _init_services(app: Flask, cfg: Config) -> None:

@@ -18,28 +18,30 @@ def get_history():
     """Return the analysis history for a user.
 
     Query Parameters:
-        email (str): User email address
+        email (str): User email address (optional — returns recent analyses if omitted)
 
     Returns:
         JSON with 'history' list of past analyses.
     """
     raw_email = request.args.get("email", "")
-    if not raw_email:
-        return jsonify({"error": "Email parameter required.", "code": "MISSING_FIELD"}), 400
 
-    try:
-        email = sanitize_email(raw_email)
-    except ValueError as exc:
-        return jsonify({"error": str(exc), "code": "INVALID_INPUT"}), 400
+    if raw_email:
+        try:
+            email = sanitize_email(raw_email)
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "code": "INVALID_INPUT"}), 400
 
-    try:
-        history = mongodb_service.get_user_history(email)
-        for record in history:
-            if "created_at" in record and hasattr(record["created_at"], "isoformat"):
-                record["created_at"] = record["created_at"].isoformat()
-    except Exception as exc:
-        logger.error("History retrieval failed: %s", exc)
-        return jsonify({"error": "History unavailable.", "code": "MONGO_ERROR", "history": []}), 200
+        try:
+            history = mongodb_service.get_user_history(email)
+            for record in history:
+                if "created_at" in record and hasattr(record["created_at"], "isoformat"):
+                    record["created_at"] = record["created_at"].isoformat()
+        except Exception as exc:
+            logger.error("History retrieval failed: %s", exc)
+            return jsonify({"error": "History unavailable.", "code": "MONGO_ERROR", "history": []}), 200
+    else:
+        # No email provided — return empty list (MongoDB unavailable or not queried)
+        history = []
 
     return jsonify({"history": history, "count": len(history)}), 200
 

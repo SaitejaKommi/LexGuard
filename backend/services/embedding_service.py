@@ -19,22 +19,27 @@ _standard_embeddings: Optional[np.ndarray] = None
 
 
 def init_embedder() -> None:
-    """Load the sentence-transformer model and pre-compute standard clause embeddings.
+    """Schedule lazy background loading of the sentence-transformer model.
 
-    This is called once at application startup to avoid per-request model loading.
-
-    Raises:
-        ImportError: If sentence-transformers is not installed.
+    Starts a daemon thread to load the model without blocking app startup.
     """
-    global _embedder, _standard_embeddings
-    try:
-        from sentence_transformers import SentenceTransformer
+    import threading
 
-        _embedder = SentenceTransformer(EMBEDDING_MODEL)
-        _standard_embeddings = _embedder.encode(STANDARD_FAIR_CLAUSES, convert_to_numpy=True)
-        logger.info("Sentence-transformer model '%s' loaded.", EMBEDDING_MODEL)
-    except ImportError as exc:
-        logger.warning("sentence-transformers not available; RAG similarity disabled. %s", exc)
+    def _load():
+        global _embedder, _standard_embeddings
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedder = SentenceTransformer(EMBEDDING_MODEL)
+            _standard_embeddings = _embedder.encode(STANDARD_FAIR_CLAUSES, convert_to_numpy=True)
+            logger.info("Sentence-transformer model '%s' loaded in background.", EMBEDDING_MODEL)
+        except ImportError as exc:
+            logger.warning("sentence-transformers not installed; RAG disabled. %s", exc)
+        except Exception as exc:
+            logger.warning("Embedder failed to load: %s", exc)
+
+    t = threading.Thread(target=_load, daemon=True, name="embedder-loader")
+    t.start()
+    logger.info("Embedder loading started in background thread.")
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

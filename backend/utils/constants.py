@@ -103,7 +103,7 @@ SUPPORTED_LANGUAGES: Final[dict] = {
 # ---------------------------------------------------------------------------
 # Gemini model settings
 # ---------------------------------------------------------------------------
-GEMINI_MODEL: Final[str] = "gemini-2.5-flash"
+GEMINI_MODEL: Final[str] = "gemini-1.5-flash"
 GEMINI_MAX_OUTPUT_TOKENS: Final[int] = 8192
 GEMINI_TEMPERATURE: Final[float] = 0.1
 

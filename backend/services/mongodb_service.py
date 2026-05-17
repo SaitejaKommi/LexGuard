@@ -28,7 +28,7 @@ _db_name: str = "lexguard"
 
 
 def init_mongo(uri: str, db_name: str) -> None:
-    """Initialise the MongoDB connection pool.
+    """Initialise the MongoDB connection pool and create indexes.
 
     Args:
         uri: MongoDB Atlas connection string.
@@ -42,6 +42,18 @@ def init_mongo(uri: str, db_name: str) -> None:
     _db_name = db_name
     _client.admin.command("ping")
     logger.info("MongoDB connection established to database '%s'.", db_name)
+
+    # Create indexes for performance
+    db = _client[_db_name]
+    try:
+        db[MONGO_ANALYSES_COLLECTION].create_index("user_email")
+        db[MONGO_ANALYSES_COLLECTION].create_index("doc_hash", unique=True, sparse=True)
+        db[MONGO_ANALYSES_COLLECTION].create_index([("created_at", DESCENDING)])
+        db[MONGO_CHAT_COLLECTION].create_index("session_id")
+        db[MONGO_USERS_COLLECTION].create_index("email", unique=True, sparse=True)
+        logger.info("MongoDB indexes ensured.")
+    except Exception as exc:
+        logger.warning("Index creation warning (non-critical): %s", exc)
 
 
 def _get_collection(name: str) -> Collection:
@@ -69,6 +81,7 @@ def save_analysis(
     clauses: list[dict],
     summary: str,
     raw_text_snippet: str,
+    contract_type: str = "Legal Agreement",
 ) -> str:
     """Persist a completed contract analysis to the analyses collection.
 
@@ -80,6 +93,7 @@ def save_analysis(
         clauses: List of extracted clause dictionaries.
         summary: One-paragraph analysis summary.
         raw_text_snippet: First 500 chars of document text for preview.
+        contract_type: Detected contract type.
 
     Returns:
         Inserted document ID as a string.
@@ -93,12 +107,24 @@ def save_analysis(
         "filename": filename,
         "doc_hash": doc_hash,
         "risk_score": risk_score,
+        "contract_type": contract_type,
+        "clause_count": len(clauses),
         "clauses": clauses,
         "summary": summary,
         "raw_text_snippet": raw_text_snippet,
         "created_at": datetime.now(timezone.utc),
     }
-    result = col.insert_one(doc)
+    try:
+        result = col.insert_one(doc)
+    except Exception:
+        # Doc with same hash may already exist — upsert it
+        col.update_one(
+            {"doc_hash": doc_hash},
+            {"$set": {**doc}},
+            upsert=True,
+        )
+        existing = col.find_one({"doc_hash": doc_hash}, {"_id": 1})
+        return str(existing["_id"]) if existing else doc_hash[:16]
     return str(result.inserted_id)
 
 

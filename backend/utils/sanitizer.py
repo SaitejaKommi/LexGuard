@@ -79,7 +79,18 @@ def sanitize_chat_message(message: str) -> str:
     Raises:
         ValueError: If message is empty or too long after cleaning.
     """
-    return sanitize_text(message, max_length=MAX_CHAT_MESSAGE_LENGTH)
+    if not isinstance(message, str):
+        raise ValueError("Message must be a string.")
+    cleaned = bleach.clean(message, tags=[], strip=True)
+    cleaned = unicodedata.normalize("NFC", cleaned)
+    cleaned = cleaned.strip()
+    if not cleaned:
+        raise ValueError("Input is empty after sanitization.")
+    if len(cleaned) > MAX_CHAT_MESSAGE_LENGTH:
+        raise ValueError(
+            f"Message exceeds maximum allowed length of {MAX_CHAT_MESSAGE_LENGTH} characters."
+        )
+    return cleaned
 
 
 def sanitize_search_query(query: str) -> str:
