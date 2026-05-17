@@ -182,9 +182,12 @@ document.addEventListener("DOMContentLoaded", () => {
     uploadAndAnalyze(file);
   });
 
-  document.getElementById("sample-employment").addEventListener("click", () => loadSample("sample_employment"));
-  document.getElementById("sample-nda").addEventListener("click", () => loadSample("sample_nda"));
-  document.getElementById("sample-subscription").addEventListener("click", () => loadSample("sample_subscription"));
+  const sampleEmp = document.getElementById("sample-employment");
+  if(sampleEmp) sampleEmp.addEventListener("click", () => loadSample("sample_employment"));
+  const sampleNda = document.getElementById("sample-nda");
+  if(sampleNda) sampleNda.addEventListener("click", () => loadSample("sample_nda"));
+  const sampleSub = document.getElementById("sample-subscription");
+  if(sampleSub) sampleSub.addEventListener("click", () => loadSample("sample_subscription"));
 
   document.querySelectorAll(".nav-link").forEach(link => {
     link.addEventListener("click", e => {

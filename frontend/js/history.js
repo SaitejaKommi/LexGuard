@@ -1,58 +1,77 @@
 /**
  * history.js — Analysis history module for LexGuard.
- * Loads past analyses from MongoDB via the backend API.
  * @module history
  */
 
-/**
- * Render the analysis history list.
- * @param {Array<Object>} history - Array of past analysis records.
- * @returns {void}
- */
 function renderHistory(history) {
   const list = document.getElementById("history-list");
   if (!history || history.length === 0) {
-    list.innerHTML = `<p class="history-empty">📋 No past analyses found. Upload a contract to get started.</p>`;
+    list.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:3rem">No past analyses found. Upload a contract to get started.</p>`;
     return;
   }
+  
   list.innerHTML = "";
-  history.forEach(record => {
-    const item = document.createElement("div");
-    item.className = "history-item";
-    item.setAttribute("tabindex", "0");
-    item.setAttribute("role", "button");
-    item.setAttribute("aria-label", `Analysis: ${record.filename}, Risk Score: ${record.risk_score}`);
-
-    const level = scoreToLevel(record.risk_score || 0);
-    const color = RISK_COLORS[level] || "#888";
-    const date = record.created_at ? new Date(record.created_at).toLocaleString() : "Unknown date";
-
-    item.innerHTML = `
-      <div class="history-score" style="color:${color}">${record.risk_score || 0}</div>
-      <div class="history-info">
-        <div class="history-filename">${record.filename || "Unknown file"}</div>
-        <div class="history-date">${date}</div>
-        <div class="history-summary">${(record.summary || "").slice(0, 100)}…</div>
-      </div>
-      <span class="risk-badge ${level.toLowerCase()}">${level}</span>`;
-
-    list.appendChild(item);
+  
+  // Group by Today and Yesterday naively
+  const now = new Date();
+  const today = [];
+  const older = [];
+  
+  history.forEach(r => {
+    const d = new Date(r.created_at);
+    if(d.toDateString() === now.toDateString()) today.push(r);
+    else older.push(r);
   });
+
+  const buildRow = (record) => {
+    const level = scoreToLevel(record.risk_score || 0);
+    let badgeClass = level.toLowerCase();
+    let badgeLabel = level === 'CRITICAL' ? 'High Risk' : (level === 'HIGH' || level === 'MEDIUM' ? 'Moderate Risk' : 'Low Risk');
+    let color = 'var(--text-muted)';
+    if(badgeClass === 'critical' || badgeClass === 'high') { badgeClass = 'critical'; color = 'var(--risk-critical)'; badgeLabel = 'High Risk ⚠'; }
+    else if(badgeClass === 'medium') { badgeClass = 'medium'; color = 'var(--risk-medium)'; badgeLabel = 'Moderate Risk ⓘ'; }
+    else { badgeClass = 'safe'; color = 'var(--risk-safe)'; badgeLabel = 'Low Risk ✓'; }
+
+    const timeStr = new Date(record.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    const isDoc = (record.filename||'').toLowerCase().includes('doc');
+
+    return `
+      <div class="history-row" tabindex="0">
+        <div class="history-icon-box ${isDoc?'doc':''}"><span aria-hidden="true">${isDoc?'📝':'📄'}</span></div>
+        <div class="history-details">
+          <div class="history-filename">${record.filename || "Unknown file"}</div>
+          <div class="history-meta">
+            <span><span aria-hidden="true">🕒</span> ${timeStr}</span>
+            <span class="history-meta-dot">●</span>
+            <span>${isDoc?'Agreement':'Contract'}</span>
+            <span class="history-meta-dot">●</span>
+            <span>Analyzed by: System</span>
+          </div>
+        </div>
+        <div class="history-actions">
+          <span class="risk-badge ${badgeClass}" style="color:${color}">${badgeLabel}</span>
+          <button class="clause-menu-icon" aria-label="Options">⋮</button>
+        </div>
+      </div>
+    `;
+  };
+
+  if (today.length > 0) {
+    list.innerHTML += `<div class="history-group-title">TODAY</div><div class="history-list">${today.map(buildRow).join('')}</div>`;
+  }
+  if (older.length > 0) {
+    list.innerHTML += `<div class="history-group-title yesterday" style="margin-top:2rem">YESTERDAY</div><div class="history-list">${older.map(buildRow).join('')}</div>`;
+  }
 }
 
-/**
- * Load history for the current user's email from the API.
- * @returns {Promise<void>}
- */
 async function loadHistory() {
   const email = document.getElementById("user-email").value.trim();
   const errEl = document.getElementById("history-error");
   errEl.style.display = "none";
   const list = document.getElementById("history-list");
-  list.innerHTML = "<p style='color:var(--muted);text-align:center;padding:2rem'>Loading history…</p>";
 
   if (!email) {
-    list.innerHTML = `<p class="history-empty">Enter your email address above to view your analysis history.</p>`;
+    list.innerHTML = `<p style="text-align:center;color:var(--text-muted)">User email required.</p>`;
     return;
   }
 
