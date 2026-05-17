@@ -4,7 +4,7 @@
  */
 
 /** @const {string} API_BASE_URL — Backend URL. Replace with your Render URL after deployment. */
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "https://lexguard-ewk4.onrender.com";
 
 /** @const {Object} RISK_COLORS — Hex colors keyed by risk level string. */
 const RISK_COLORS = {
