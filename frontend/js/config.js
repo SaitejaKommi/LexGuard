@@ -96,3 +96,41 @@ const I18N = {
     chat_heading: "AI చట్టపరమైన సహాయకుడు",
   },
 };
+
+/**
+ * Ping backend health endpoint and update UI.
+ */
+async function checkBackendHealth() {
+  const dot = document.getElementById("api-status-dot");
+  const text = document.getElementById("api-status-text");
+  if (!dot || !text) return;
+  
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/health`, { method: "GET" });
+    if (res.ok) {
+      dot.className = "status-dot connected";
+      if (typeof translations !== "undefined" && typeof localStorage !== "undefined") {
+        const lang = localStorage.getItem("lexguard_lang") || "en";
+        text.textContent = (translations[lang] && translations[lang].status_connected) ? translations[lang].status_connected : "Backend Connected";
+      } else {
+        text.textContent = "Backend Connected";
+      }
+    } else {
+      throw new Error("Not OK");
+    }
+  } catch (e) {
+    dot.className = "status-dot disconnected";
+    if (typeof translations !== "undefined" && typeof localStorage !== "undefined") {
+      const lang = localStorage.getItem("lexguard_lang") || "en";
+      text.textContent = (translations[lang] && translations[lang].status_disconnected) ? translations[lang].status_disconnected : "Backend Offline";
+    } else {
+      text.textContent = "Backend Offline";
+    }
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  checkBackendHealth();
+  // Check every 30s
+  setInterval(checkBackendHealth, 30000);
+});

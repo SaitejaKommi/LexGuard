@@ -13,3 +13,5 @@ venv/
 node_modules/
 *.log
 .DS_Store
+# Firebase service account (do not commit)
+lexguard-*-firebase-adminsdk-*.json

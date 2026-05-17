@@ -49,8 +49,24 @@ def negotiate():
     try:
         recommendations = gemini_service.generate_negotiation_recommendations(risky_clauses)
     except RuntimeError as exc:
-        logger.error("Negotiation generation failed: %s", exc)
-        return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
+        message_text = str(exc).lower()
+        if any(token in message_text for token in ("not initial", "not configured", "model")):
+            logger.warning("Negotiation generation failed; using fallback: %s", exc)
+            recommendations = [
+                {
+                    "clause_title": clause.get("title") or clause.get("clause_title") or "Clause",
+                    "risk_level": clause.get("risk_level", "HIGH"),
+                    "current_language": (clause.get("original_text") or clause.get("clause_text", ""))[:150],
+                    "suggested_alternative": clause.get("recommendation", "Narrow the clause and add mutual protections."),
+                    "what_to_ask": clause.get("recommendation", "Ask for narrower language and mutual limits."),
+                    "negotiation_tip": "Use specific business impact to justify the change.",
+                    "priority": "high" if clause.get("risk_level") == "CRITICAL" else "medium",
+                }
+                for clause in risky_clauses
+            ]
+        else:
+            logger.error("Negotiation generation failed: %s", exc)
+            return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
 
     return jsonify({
         "recommendations": recommendations,

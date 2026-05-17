@@ -16,6 +16,7 @@ def test_config():
     cfg.SECRET_KEY = "test-secret"
     cfg.GEMINI_API_KEY = ""
     cfg.MONGO_URI = ""
+    cfg.GOOGLE_TTS_API_KEY = ""
     cfg.CORS_ORIGINS = ["*"]
     return cfg
 

@@ -6,6 +6,8 @@ initialises all services, and attaches security headers to every response.
 """
 
 import logging
+import os
+import sys
 from typing import Optional
 
 from flask import Flask, jsonify, Response
@@ -13,8 +15,11 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from .config import Config
-from .utils.constants import SECURITY_HEADERS, RATE_LIMIT_PER_MINUTE
+if __package__ in (None, ""):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend.config import Config
+from backend.utils.constants import SECURITY_HEADERS, RATE_LIMIT_PER_MINUTE
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +30,17 @@ def _register_blueprints(app: Flask) -> None:
     Args:
         app: The Flask application instance.
     """
-    from .routes.analyze import analyze_bp
-    from .routes.chat import chat_bp
-    from .routes.compare import compare_bp
-    from .routes.search import search_bp
-    from .routes.translate import translate_bp
-    from .routes.tts import tts_bp
-    from .routes.history import history_bp
-    from .routes.health import health_bp
-    from .routes.negotiate import negotiate_bp
-    from .routes.glossary import glossary_bp
+    from backend.routes.analyze import analyze_bp
+    from backend.routes.chat import chat_bp
+    from backend.routes.compare import compare_bp
+    from backend.routes.search import search_bp
+    from backend.routes.translate import translate_bp
+    from backend.routes.tts import tts_bp
+    from backend.routes.history import history_bp
+    from backend.routes.health import health_bp
+    from backend.routes.negotiate import negotiate_bp
+    from backend.routes.glossary import glossary_bp
+    from backend.routes.fact import fact_bp
 
     app.register_blueprint(analyze_bp)
     app.register_blueprint(chat_bp)
@@ -46,6 +52,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(health_bp)
     app.register_blueprint(negotiate_bp)
     app.register_blueprint(glossary_bp)
+    app.register_blueprint(fact_bp)
 
 
 def _init_services(app: Flask, cfg: Config) -> None:
@@ -55,9 +62,9 @@ def _init_services(app: Flask, cfg: Config) -> None:
         app: The Flask application instance.
         cfg: Populated Config dataclass instance.
     """
-    from .services import gemini_service, embedding_service
-    from .services import mongodb_service, firebase_service
-    from .services import translate_service, tts_service, search_service
+    from backend.services import gemini_service, embedding_service
+    from backend.services import mongodb_service, firebase_service
+    from backend.services import translate_service, tts_service, search_service
 
     if cfg.GEMINI_API_KEY:
         gemini_service.init_gemini(cfg.GEMINI_API_KEY)
@@ -142,3 +149,8 @@ def create_app(config: Optional[Config] = None) -> Flask:
 
     logger.info("LexGuard application created successfully.")
     return app
+
+
+if __name__ == "__main__":
+    application = create_app()
+    application.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

@@ -30,22 +30,37 @@ logger = logging.getLogger(__name__)
 _model: Optional[genai.GenerativeModel] = None
 
 
+_GEMINI_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+
+
 def init_gemini(api_key: str) -> None:
-    """Configure the Gemini SDK with the provided API key.
+    """Configure the Gemini SDK and initialise the best available model.
+
+    Configures the Gemini SDK for lazy use at request time. Startup must not
+    fail if credentials are missing or if the API is temporarily unavailable.
 
     Args:
         api_key: Google Gemini API key from environment.
     """
     global _model
+    if not api_key:
+        _model = None
+        logger.warning("GEMINI_API_KEY not set; AI features disabled.")
+        return
+
     genai.configure(api_key=api_key)
-    _model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        generation_config={
-            "temperature": GEMINI_TEMPERATURE,
-            "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
-        },
-    )
-    logger.info("Gemini model '%s' initialised.", GEMINI_MODEL)
+    try:
+        _model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            generation_config={
+                "temperature": GEMINI_TEMPERATURE,
+                "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
+            },
+        )
+        logger.info("Gemini model '%s' configured.", GEMINI_MODEL)
+    except Exception as exc:
+        _model = None
+        logger.warning("Gemini initialization failed: %s. AI features disabled.", exc)
 
 
 def _get_model() -> genai.GenerativeModel:
@@ -58,6 +73,9 @@ def _get_model() -> genai.GenerativeModel:
 def _call_gemini(prompt: str) -> str:
     """Send a prompt to Gemini and return the text response.
 
+    On model-not-found errors, automatically retries with the next available
+    model in the fallback chain.
+
     Args:
         prompt: Full prompt string to send.
 
@@ -65,13 +83,37 @@ def _call_gemini(prompt: str) -> str:
         Raw text response from Gemini.
 
     Raises:
-        RuntimeError: On API failure.
+        RuntimeError: On API failure after all retries.
     """
+    global _model
+    model = _get_model()
+
     try:
-        model = _get_model()
         response = model.generate_content(prompt)
         return response.text
     except Exception as exc:
+        err_str = str(exc).lower()
+        # If this is a model availability error, try fallbacks
+        if any(kw in err_str for kw in ("not found", "404", "deprecated", "invalid")):
+            logger.warning("Current model failed (%s); attempting fallback models.", exc)
+            current_name = model.model_name if hasattr(model, "model_name") else ""
+            for fallback_name in _GEMINI_MODELS:
+                if fallback_name == current_name:
+                    continue
+                try:
+                    fallback = genai.GenerativeModel(
+                        model_name=fallback_name,
+                        generation_config={
+                            "temperature": GEMINI_TEMPERATURE,
+                            "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
+                        },
+                    )
+                    response = fallback.generate_content(prompt)
+                    _model = fallback  # Persist the working model
+                    logger.info("Switched to fallback Gemini model '%s'.", fallback_name)
+                    return response.text
+                except Exception as fb_exc:
+                    logger.warning("Fallback model '%s' also failed: %s", fallback_name, fb_exc)
         logger.error("Gemini API call failed: %s", exc)
         raise RuntimeError(f"Gemini API error: {exc}") from exc
 
@@ -113,6 +155,280 @@ def _extract_json(raw: str) -> Any:
                 continue
 
     raise ValueError(f"Could not parse Gemini JSON response. Raw (first 200 chars): {raw[:200]}")
+
+
+def _score_to_level(score: int) -> str:
+    if score >= 80:
+        return "CRITICAL"
+    if score >= 60:
+        return "HIGH"
+    if score >= 40:
+        return "MEDIUM"
+    if score >= 20:
+        return "LOW"
+    return "SAFE"
+
+
+def _normalize_clause_category(text: str) -> str:
+    lowered = text.lower()
+    mapping = [
+        ("non-compete", "NonCompete"),
+        ("non compete", "NonCompete"),
+        ("indemn", "Indemnification"),
+        ("arbitr", "Arbitration"),
+        ("confidential", "Confidentiality"),
+        ("liabil", "Liability"),
+        ("termination", "Termination"),
+        ("intellectual property", "IPRights"),
+        ("copyright", "IPRights"),
+        ("privacy", "Privacy"),
+        ("data", "Privacy"),
+        ("renew", "Renewal"),
+        ("auto-renew", "Renewal"),
+        ("salary", "Financial"),
+        ("payment", "Financial"),
+        ("governing law", "GoverningLaw"),
+    ]
+    for needle, category in mapping:
+        if needle in lowered:
+            return category
+    return "Other"
+
+
+def _analyze_clause_locally(clause_text: str) -> dict:
+    lowered = clause_text.lower()
+    score = 20
+    reasons: list[str] = []
+    recommendations: list[str] = []
+
+    keyword_rules = [
+        ("non-compete", 92, "This limits where and how you can work after the contract ends.", "Ask to shorten the duration, narrow the industry scope, and limit the geography."),
+        ("indemn", 88, "You may be paying for losses even when you are not at fault.", "Limit indemnity to your own proven negligence or misconduct."),
+        ("arbitr", 76, "This can force disputes into a private process with fewer appeal rights.", "Ask for a neutral arbitrator, shared fees, and a court option for urgent relief."),
+        ("liabil", 74, "This can cap the other side's responsibility while leaving your exposure open.", "Negotiate a mutual liability cap and carve-outs for intentional harm only."),
+        ("confidential", 60, "This may restrict sharing information for a long time.", "Add a sunset clause and carve out public or already-known information."),
+        ("intellectual property", 84, "This may assign everything you create to the other side.", "Limit the assignment to work created using company resources during the contract term."),
+        ("privacy", 78, "This may allow broad collection or use of personal data.", "Narrow the data types, purpose, and sharing permissions."),
+        ("data", 78, "This may allow broad collection or use of personal data.", "Narrow the data types, purpose, and sharing permissions."),
+        ("renew", 68, "This may auto-renew the agreement or make cancellation difficult.", "Add a clear cancellation window and written notice requirement."),
+        ("termination", 66, "This may let one side end the contract without fair notice or severance.", "Ask for mutual notice periods and a cause-based termination standard."),
+        ("payment", 55, "This clause affects money, billing, or timing obligations.", "Confirm payment timing, late fees, and any refund rights."),
+        ("salary", 55, "This clause affects money, billing, or timing obligations.", "Confirm payment timing, late fees, and any refund rights."),
+        ("governing law", 42, "This determines which jurisdiction's law will apply.", "Prefer a neutral or mutually acceptable jurisdiction."),
+    ]
+
+    for needle, candidate_score, reason, recommendation in keyword_rules:
+        if needle in lowered:
+            score = max(score, candidate_score)
+            reasons.append(reason)
+            recommendations.append(recommendation)
+
+    if len(clause_text) > 800:
+        score = max(score, 45)
+        reasons.append("This section is unusually long and may hide additional obligations.")
+
+    risk_level = _score_to_level(score)
+    title_words = clause_text.strip().split()
+    title = " ".join(title_words[:6]).rstrip(".,;") if title_words else "Clause"
+    category = _normalize_clause_category(clause_text)
+    plain = reasons[0] if reasons else "This appears to be standard contract language."
+    impact = reasons[0] if reasons else "This is unlikely to materially change your obligations."
+    recommendation = recommendations[0] if recommendations else "Review this clause with a lawyer before signing."
+
+    return {
+        "id": "",
+        "title": title,
+        "category": category,
+        "risk_level": risk_level,
+        "risk_score": score,
+        "original_text": clause_text[:500],
+        "plain_english": plain,
+        "impact": impact,
+        "recommendation": recommendation,
+        "why_risky": plain,
+        "red_flags": reasons[:3] if reasons else ["Standard language"],
+        "similarity_score": 45 if risk_level in {"HIGH", "CRITICAL"} else 80,
+    }
+
+
+def _split_local_clauses(document_text: str) -> list[str]:
+    text = document_text.strip()
+    if not text:
+        return []
+
+    parts = re.split(r"\n(?=\s*(?:\d+\.|\d+\)|[A-Z][A-Z\s]{3,}:))", text)
+    chunks = [part.strip() for part in parts if part.strip()]
+    if len(chunks) > 1:
+        return chunks[:15]
+
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+    return paragraphs[:15]
+
+
+def _fallback_analysis(document_text: str) -> dict:
+    clauses = [_analyze_clause_locally(chunk) for chunk in _split_local_clauses(document_text)]
+    if not clauses:
+        clauses = [_analyze_clause_locally(document_text[:1000] or "General contract terms.")]
+
+    for idx, clause in enumerate(clauses, start=1):
+        clause["id"] = f"clause_{idx}"
+
+    overall_score = compute_overall_risk_score(clauses)
+    risk_level = _score_to_level(overall_score)
+    red_flags = []
+    for clause in clauses:
+        red_flags.extend(clause.get("red_flags", []))
+    red_flags = list(dict.fromkeys(red_flags))[:5]
+    negotiation_priorities = [
+        clause["recommendation"]
+        for clause in sorted(clauses, key=lambda c: c.get("risk_score", 0), reverse=True)
+        if clause.get("risk_level") in {"HIGH", "CRITICAL"}
+    ][:3]
+    if not negotiation_priorities:
+        negotiation_priorities = ["Confirm the key obligations and any cancellation rights."]
+
+    return {
+        "overall_score": overall_score,
+        "overall_risk_score": overall_score,
+        "risk_level": risk_level,
+        "contract_type": "Employment Agreement" if "employment" in document_text.lower() else "Legal Agreement",
+        "summary": f"Fallback analysis identified {len(clauses)} clause(s) with an overall {risk_level.lower()} risk profile.",
+        "clauses": clauses,
+        "negotiation_priorities": negotiation_priorities,
+        "red_flags": red_flags,
+        "risk_distribution": {
+            level: sum(1 for clause in clauses if clause.get("risk_level") == level)
+            for level in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "SAFE"]
+        },
+        "negotiation_recommendations": [
+            {
+                "clause_title": clause.get("title", "Clause"),
+                "risk_level": clause.get("risk_level", "MEDIUM"),
+                "current_language": clause.get("original_text", "")[:150],
+                "suggested_alternative": clause.get("recommendation", "Review with counsel."),
+                "what_to_ask": clause.get("recommendation", "Review with counsel."),
+                "negotiation_tip": "Use the clause's business impact to justify a narrower alternative.",
+                "priority": "high" if clause.get("risk_level") in {"HIGH", "CRITICAL"} else "medium",
+            }
+            for clause in clauses
+            if clause.get("risk_level") in {"HIGH", "CRITICAL"}
+        ],
+    }
+
+
+def _fallback_glossary(term: str) -> dict:
+    term_key = term.strip().lower()
+    definitions = {
+        "indemnification": (
+            "A promise to compensate the other side for certain losses or claims.",
+            "If a vendor's mistake causes a lawsuit, an indemnification clause may require one side to cover the cost.",
+            "liability",
+            "damages",
+            "hold harmless",
+            "Watch for one-sided or unlimited indemnification obligations.",
+        ),
+        "arbitration": (
+            "A private dispute process instead of going to court.",
+            "Two companies may require disputes to be heard by an arbitrator rather than a judge.",
+            "mediation",
+            "class action waiver",
+            "forum selection",
+            "You may lose some court rights, including a jury trial.",
+        ),
+        "non-compete": (
+            "A restriction that limits where you can work or compete after the contract ends.",
+            "An employee may be barred from working in the same industry for a period of time after resignation.",
+            "restraint of trade",
+            "garden leave",
+            "employment agreement",
+            "Overbroad non-competes can be hard to challenge after you sign.",
+        ),
+    }
+    definition, example, *rest = definitions.get(
+        term_key,
+        (
+            f"A legal term related to {term_key}.",
+            f"This term describes a contract rule that affects {term_key}.",
+            "contract",
+            "liability",
+            "risk",
+            "Watch for vague wording and hidden obligations.",
+        ),
+    )
+    return {
+        "term": term,
+        "definition": definition,
+        "example": example,
+        "related_terms": list(rest[:3]),
+        "risk_note": rest[3] if len(rest) > 3 else "Watch for vague wording and hidden obligations.",
+    }
+
+
+def _fallback_chat(document_text: str, clauses_summary: str, conversation_history: list[dict], user_message: str) -> str:
+    context = f"{document_text}\n{clauses_summary}".lower()
+    highlights = []
+    if "non-compete" in context or "non compete" in context:
+        highlights.append("The non-compete looks like one of the highest-risk provisions because it can limit future work options.")
+    if "indemn" in context:
+        highlights.append("The indemnification language may require you to pay for claims even when you are not at fault.")
+    if "arbitr" in context:
+        highlights.append("The arbitration clause may reduce your ability to sue in court or appeal a decision.")
+    if not highlights:
+        highlights.append("The main risks are usually the clauses that control termination, liability, intellectual property, and renewal.")
+
+    history_note = ""
+    if conversation_history:
+        history_note = f" I can also see {len(conversation_history)} prior chat message(s) in this session."
+
+    return (
+        f"Based on the contract context, the biggest risks are: {' '.join(highlights)}"
+        f" For your question, '{user_message}', I would focus on whether the clause is one-sided, how long it lasts, and whether you can negotiate narrower language."
+        f" Note: This is AI analysis, not legal advice. Consult a licensed attorney for legal decisions.{history_note}"
+    )
+
+
+def _fallback_compare(text_a: str, text_b: str) -> dict:
+    a_lower = text_a.lower()
+    b_lower = text_b.lower()
+    keywords = ["non-compete", "indemn", "arbitr", "liabil", "confidential", "renew", "data", "ip", "termination"]
+    differences = []
+    favorable_count = 0
+    unfavorable_count = 0
+
+    for keyword in keywords:
+        in_a = keyword in a_lower
+        in_b = keyword in b_lower
+        if in_a == in_b:
+            continue
+        verdict = "unfavorable" if in_b and not in_a else "favorable"
+        if verdict == "favorable":
+            favorable_count += 1
+        else:
+            unfavorable_count += 1
+        differences.append(
+            {
+                "clause_name": keyword.title(),
+                "original_text": text_a[:200],
+                "modified_text": text_b[:200],
+                "verdict": verdict,
+                "explanation": "The second contract is more restrictive in this area." if verdict == "unfavorable" else "The second contract is less restrictive in this area.",
+                "winner": "Contract B" if verdict == "unfavorable" else "Contract A",
+                "category": keyword.title(),
+                "contract_a_text": text_a[:200],
+                "contract_b_text": text_b[:200],
+            }
+        )
+
+    overall_risk = "HIGH" if unfavorable_count >= 3 else "MEDIUM" if unfavorable_count else "LOW"
+    return {
+        "summary": "Fallback comparison based on key contract language differences.",
+        "overall_risk": overall_risk,
+        "recommendation": "Contract A" if favorable_count >= unfavorable_count else "Contract B",
+        "clauses_altered": len(differences),
+        "favorable_count": favorable_count,
+        "unfavorable_count": unfavorable_count,
+        "differences": differences,
+    }
 
 
 def analyze_contract_full(document_text: str) -> dict:
@@ -199,8 +515,15 @@ REQUIRED JSON STRUCTURE (return exactly this, with real data):
 CONTRACT TEXT TO ANALYZE:
 {document_text[:15000]}"""
 
-    raw = _call_gemini(prompt)
-    result = _extract_json(raw)
+    if _model is None:
+        return _fallback_analysis(document_text)
+
+    try:
+        raw = _call_gemini(prompt)
+        result = _extract_json(raw)
+    except Exception as exc:
+        logger.warning("Gemini analysis unavailable; using local fallback: %s", exc)
+        return _fallback_analysis(document_text)
 
     # Validate and normalize
     if not isinstance(result, dict):
@@ -321,6 +644,20 @@ def generate_negotiation_recommendations(clauses: list[dict]) -> list[dict]:
     if not risky:
         return []
 
+    if _model is None:
+        return [
+            {
+                "clause_title": c.get("title") or c.get("clause_title") or "Clause",
+                "risk_level": c.get("risk_level", "HIGH"),
+                "current_language": (c.get("clause_text") or c.get("original_text", ""))[:150],
+                "suggested_alternative": c.get("recommendation", "Narrow the clause and add mutual protections."),
+                "what_to_ask": c.get("recommendation", "Ask for narrower language and mutual limits."),
+                "negotiation_tip": "Use specific business impact to justify the change.",
+                "priority": "high" if c.get("risk_level") == "CRITICAL" else "medium",
+            }
+            for c in risky
+        ]
+
     risky_json = json.dumps(
         [{"clause_text": c.get("clause_text") or c.get("original_text", ""),
           "risk_level": c.get("risk_level"),
@@ -343,8 +680,23 @@ Return ONLY valid JSON array. No markdown, no code fences.
 HIGH-RISK CLAUSES:
 {risky_json}"""
 
-    raw = _call_gemini(prompt)
-    return _extract_json(raw)
+    try:
+        raw = _call_gemini(prompt)
+        return _extract_json(raw)
+    except Exception as exc:
+        logger.warning("Negotiation recommendations fallback used: %s", exc)
+        return [
+            {
+                "clause_title": c.get("title") or c.get("clause_title") or "Clause",
+                "risk_level": c.get("risk_level", "HIGH"),
+                "current_language": (c.get("clause_text") or c.get("original_text", ""))[:150],
+                "suggested_alternative": c.get("recommendation", "Narrow the clause and add mutual protections."),
+                "what_to_ask": c.get("recommendation", "Ask for narrower language and mutual limits."),
+                "negotiation_tip": "Use specific business impact to justify the change.",
+                "priority": "high" if c.get("risk_level") == "CRITICAL" else "medium",
+            }
+            for c in risky
+        ]
 
 
 def chat_with_document(
@@ -384,7 +736,14 @@ Answer helpfully in plain language. Be specific, cite clause text when relevant,
 
 Answer:"""
 
-    return _call_gemini(prompt)
+    if _model is None:
+        return _fallback_chat(document_text, clauses_summary, conversation_history, user_message)
+
+    try:
+        return _call_gemini(prompt)
+    except Exception as exc:
+        logger.warning("Chat fallback used: %s", exc)
+        return _fallback_chat(document_text, clauses_summary, conversation_history, user_message)
 
 
 def compare_contracts(text_a: str, text_b: str) -> dict:
@@ -422,8 +781,15 @@ CONTRACT A (first 6000 chars):
 CONTRACT B (first 6000 chars):
 {text_b[:6000]}"""
 
-    raw = _call_gemini(prompt)
-    result = _extract_json(raw)
+    if _model is None:
+        return _fallback_compare(text_a, text_b)
+
+    try:
+        raw = _call_gemini(prompt)
+        result = _extract_json(raw)
+    except Exception as exc:
+        logger.warning("Comparison fallback used: %s", exc)
+        return _fallback_compare(text_a, text_b)
     result.setdefault("clauses_altered", len(result.get("differences", [])))
     result.setdefault("favorable_count", 0)
     result.setdefault("unfavorable_count", 0)
@@ -453,8 +819,15 @@ Return a JSON object with:
 
 Return ONLY valid JSON. No markdown, no code fences."""
 
-    raw = _call_gemini(prompt)
-    result = _extract_json(raw)
+    if _model is None:
+        return _fallback_glossary(term)
+
+    try:
+        raw = _call_gemini(prompt)
+        result = _extract_json(raw)
+    except Exception as exc:
+        logger.warning("Glossary fallback used: %s", exc)
+        return _fallback_glossary(term)
     result.setdefault("term", term)
     result.setdefault("definition", "Definition not available.")
     result.setdefault("example", "")

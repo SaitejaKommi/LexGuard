@@ -110,8 +110,10 @@ def analyze():
     try:
         pipeline_result = clause_extractor.run_full_extraction_pipeline(doc_text)
     except RuntimeError as exc:
-        logger.error("Analysis pipeline failed: %s", exc)
-        return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
+        logger.warning("Analysis pipeline failed; using fallback analysis: %s", exc)
+        from ..services import gemini_service
+
+        pipeline_result = gemini_service._fallback_analysis(doc_text)
 
     try:
         mongodb_service.upsert_user(user_email)
@@ -144,8 +146,9 @@ def analyze():
         "file_type": parsed["file_type"],
         "page_count": parsed["page_count"],
         "char_count": parsed["char_count"],
-        "overall_risk_score": pipeline_result["overall_risk_score"],
-        "risk_level": _score_to_level(pipeline_result["overall_risk_score"]),
+        "overall_score": pipeline_result.get("overall_score", pipeline_result.get("overall_risk_score", 0)),
+        "overall_risk_score": pipeline_result.get("overall_risk_score", pipeline_result.get("overall_score", 0)),
+        "risk_level": pipeline_result.get("risk_level") or _score_to_level(pipeline_result.get("overall_score", pipeline_result.get("overall_risk_score", 0))),
         "contract_type": pipeline_result.get("contract_type", "Legal Agreement"),
         "risk_distribution": pipeline_result["risk_distribution"],
         "clauses": pipeline_result["clauses"],

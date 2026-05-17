@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 compare_bp = Blueprint("compare", __name__, url_prefix="/api")
 
 
-def _parse_uploaded_file(key: str) -> tuple[str, str]:
+def _parse_uploaded_file(*keys: str) -> tuple[str, str]:
     """Extract and parse a file from the multipart request by form key.
 
     Args:
-        key: Form field name ('file_a' or 'file_b').
+        keys: Form field names to accept.
 
     Returns:
         Tuple of (extracted_text, safe_filename).
@@ -29,8 +29,9 @@ def _parse_uploaded_file(key: str) -> tuple[str, str]:
     Raises:
         ValueError: If the file is missing, invalid, or cannot be parsed.
     """
-    if key not in request.files:
-        raise ValueError(f"Missing file: '{key}' is required.")
+    key = next((candidate for candidate in keys if candidate in request.files), None)
+    if key is None:
+        raise ValueError(f"Missing file: one of {', '.join(keys)} is required.")
 
     file = request.files[key]
     filename = sanitize_filename(file.filename or "contract.txt")
@@ -59,16 +60,21 @@ def compare():
         JSON with comparison summary, differences array, and recommendation.
     """
     try:
-        text_a, name_a = _parse_uploaded_file("file_a")
-        text_b, name_b = _parse_uploaded_file("file_b")
+        text_a, name_a = _parse_uploaded_file("file_a", "file1")
+        text_b, name_b = _parse_uploaded_file("file_b", "file2")
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "INVALID_INPUT"}), 400
 
     try:
         comparison = gemini_service.compare_contracts(text_a, text_b)
     except (RuntimeError, ValueError) as exc:
-        logger.error("Comparison failed: %s", exc)
-        return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
+        message_text = str(exc).lower()
+        if any(token in message_text for token in ("not initial", "not configured", "model")):
+            logger.warning("Comparison failed; using fallback comparison: %s", exc)
+            comparison = gemini_service._fallback_compare(text_a, text_b)
+        else:
+            logger.error("Comparison failed: %s", exc)
+            return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
 
     return jsonify({
         "contract_a": name_a,

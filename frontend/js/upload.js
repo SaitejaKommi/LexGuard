@@ -84,6 +84,7 @@ async function uploadAndAnalyze(file) {
   if (email) formData.append("email", email);
 
   trackDocumentUpload(file.name.split(".").pop(), file.size);
+  console.log("[LexGuard] Analysis Step 1: Parsing document...");
   setProgress(true, "step-parse", 10, "Parsing document...");
   switchSection("analysis");
   document.getElementById("analysis-section").setAttribute("aria-busy", "true");
@@ -97,6 +98,7 @@ async function uploadAndAnalyze(file) {
   const stepTimer = setInterval(() => {
     if (stepIdx < steps.length) {
       const s = steps[stepIdx++];
+      console.log(`[LexGuard] Analysis Step ${stepIdx+1}: ${s.label}`);
       setProgress(true, s.step, s.pct, s.label);
     }
   }, 4000);
@@ -109,6 +111,7 @@ async function uploadAndAnalyze(file) {
       throw new Error(err.error || `Server error ${resp.status}`);
     }
     const data = await resp.json();
+    console.log("[LexGuard] Analysis Complete: Data received.");
     setProgress(true, "step-done", 100, "Analysis complete!");
     setTimeout(() => setProgress(false), 2000);
     lastAnalysisResult = data;
@@ -118,7 +121,12 @@ async function uploadAndAnalyze(file) {
   } catch (err) {
     clearInterval(stepTimer);
     setProgress(false);
-    showUploadError(err.message || "Analysis failed. Please try again.");
+    console.error("[LexGuard] Analysis Error:", err.message);
+    let errorMsg = err.message || "Analysis failed. Please try again.";
+    if (errorMsg.includes("Failed to fetch") || errorMsg.includes("NetworkError")) {
+      errorMsg = "Backend server is not running. Please start the Flask server.";
+    }
+    showUploadError(errorMsg);
     switchSection("upload");
   } finally {
     document.getElementById("analysis-section").setAttribute("aria-busy", "false");

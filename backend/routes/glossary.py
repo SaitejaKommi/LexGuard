@@ -43,7 +43,12 @@ def glossary():
     try:
         result = gemini_service.explain_legal_term(term)
     except RuntimeError as exc:
-        logger.error("Glossary lookup failed: %s", exc)
-        return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
+        message_text = str(exc).lower()
+        if any(token in message_text for token in ("not initial", "not configured", "model")):
+            logger.warning("Glossary lookup failed; using fallback: %s", exc)
+            result = gemini_service._fallback_glossary(term)
+        else:
+            logger.error("Glossary lookup failed: %s", exc)
+            return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
 
     return jsonify(result), 200

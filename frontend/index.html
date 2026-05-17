@@ -9,7 +9,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Slab:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
@@ -21,6 +21,7 @@
   </script>
 
   <link rel="stylesheet" href="css/styles.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -28,35 +29,41 @@
   <!-- Sidebar -->
   <nav class="sidebar" role="navigation" aria-label="Main navigation">
     <div class="sidebar-logo">
-      <div class="logo-title"><span aria-hidden="true">🛡️</span> LexGuard</div>
+      <div class="logo-title"><span aria-hidden="true">⚖️</span> LexGuard</div>
       <div class="logo-subtitle">AI Intelligence</div>
     </div>
     
     <ul class="nav-list" role="list">
-      <li><a href="#upload-section" class="nav-link active" data-section="upload">
-        <span class="nav-icon" aria-hidden="true">📄</span> Upload
+      <li><a href="#upload-section" class="nav-link active" data-section="upload" data-i18n="nav_upload">
+        <i data-lucide="file-up" class="nav-icon" aria-hidden="true"></i> Upload
       </a></li>
-      <li><a href="#analysis-section" class="nav-link" data-section="analysis">
-        <span class="nav-icon" aria-hidden="true">📊</span> Analysis
+      <li><a href="#analysis-section" class="nav-link" data-section="analysis" data-i18n="nav_analysis">
+        <i data-lucide="bar-chart-2" class="nav-icon" aria-hidden="true"></i> Analysis
       </a></li>
-      <li><a href="#chat-section" class="nav-link" data-section="chat">
-        <span class="nav-icon" aria-hidden="true">💬</span> Chat Assistant
+      <li><a href="#chat-section" class="nav-link" data-section="chat" data-i18n="nav_chat">
+        <i data-lucide="message-square" class="nav-icon" aria-hidden="true"></i> Chat Assistant
       </a></li>
-      <li><a href="#compare-section" class="nav-link" data-section="compare">
-        <span class="nav-icon" aria-hidden="true">⇄</span> Compare Contracts
+      <li><a href="#compare-section" class="nav-link" data-section="compare" data-i18n="nav_compare">
+        <i data-lucide="git-compare" class="nav-icon" aria-hidden="true"></i> Compare Contracts
       </a></li>
-      <li><a href="#history-section" class="nav-link" data-section="history">
-        <span class="nav-icon" aria-hidden="true">🕒</span> History
+      <li><a href="#history-section" class="nav-link" data-section="history" data-i18n="nav_history">
+        <i data-lucide="clock" class="nav-icon" aria-hidden="true"></i> History
       </a></li>
-      <li><a href="#search-section" class="nav-link" data-section="search">
-        <span class="nav-icon" aria-hidden="true">🔍</span> Legal Search
+      <li><a href="#search-section" class="nav-link" data-section="search" data-i18n="nav_search">
+        <i data-lucide="search" class="nav-icon" aria-hidden="true"></i> Legal Search
       </a></li>
-      <li style="margin-top:auto"><a href="#" class="nav-link">
-        <span class="nav-icon" aria-hidden="true">⚙️</span> Settings
+      <li style="margin-top:auto"><a href="#" class="nav-link" data-i18n="nav_settings">
+        <i data-lucide="settings" class="nav-icon" aria-hidden="true"></i> Settings
       </a></li>
     </ul>
 
-    <button class="upgrade-btn"><span aria-hidden="true">⭐</span> Upgrade to Pro</button>
+    <div class="sidebar-footer">
+      <button class="upgrade-btn"><span aria-hidden="true">⭐</span> <span data-i18n="btn_upgrade">Upgrade to Pro</span></button>
+      <div class="connection-status">
+        <span class="status-dot" id="api-status-dot"></span>
+        <span id="api-status-text" data-i18n="status_checking">Checking connection...</span>
+      </div>
+    </div>
   </nav>
 
   <!-- Main Wrapper -->
@@ -64,18 +71,20 @@
     
     <!-- Top Header -->
     <header class="top-header" role="banner">
-      <div class="global-search-wrap">
-        <span class="global-search-icon" aria-hidden="true">🔍</span>
-        <input type="text" class="global-search-input" placeholder="Search clauses, terms..." aria-label="Global search" />
-      </div>
+      <div class="header-spacer"></div>
       <div class="header-actions">
         <button class="header-icon" aria-label="Notifications"><span aria-hidden="true">🔔</span></button>
         <div class="header-profile" aria-label="User Profile"><span aria-hidden="true">👤</span></div>
-        <select id="lang-select" aria-label="Language" style="background:var(--bg-card);color:var(--text-main);border:1px solid var(--border-color);border-radius:4px;padding:2px 4px;font-size:0.8rem">
-          <option value="en">EN</option>
-          <option value="es">ES</option>
-          <option value="fr">FR</option>
-        </select>
+        <div class="lang-dropdown-wrap">
+          <button class="lang-btn" id="lang-menu-btn" aria-haspopup="true" aria-expanded="false">
+            <span id="current-lang-text">🇺🇸 EN</span> <i data-lucide="chevron-down" style="width:14px;height:14px"></i>
+          </button>
+          <ul class="lang-menu" id="lang-menu">
+            <li><button class="lang-option" data-lang="en">🇺🇸 English (EN)</button></li>
+            <li><button class="lang-option" data-lang="hi">🇮🇳 Hindi (HI)</button></li>
+            <li><button class="lang-option" data-lang="es">🇪🇸 Spanish (ES)</button></li>
+          </ul>
+        </div>
       </div>
     </header>
 
@@ -106,7 +115,7 @@
           </div>
 
           <!-- Hidden email input for existing JS logic -->
-          <input type="hidden" id="user-email" value="demo@lexguard.ai" />
+          <input type="hidden" id="user-email" value="test@test.com" />
           <div id="upload-error" class="error-banner" role="alert"></div>
         </div>
       </section>
@@ -365,6 +374,7 @@
     <span id="tts-label"></span><button id="tts-pause"></button><button id="tts-stop"></button>
   </div>
 
+  <script src="js/i18n.js"></script>
   <script src="js/config.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/upload.js"></script>
@@ -375,5 +385,9 @@
   <script src="js/tts.js"></script>
   <script src="js/search.js"></script>
   <script src="js/history.js"></script>
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
 </body>
 </html>

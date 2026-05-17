@@ -67,6 +67,10 @@ async function sendChatMessage() {
   const message = input.value.trim();
   if (!message) return;
 
+  const documentContext = (typeof lastAnalysisResult !== "undefined" && lastAnalysisResult)
+    ? JSON.stringify(lastAnalysisResult)
+    : "";
+
   input.value = "";
   appendChatMessage("user", message);
   trackChatMessageSent(message.length);
@@ -76,7 +80,7 @@ async function sendChatMessage() {
     const resp = await fetch(`${API_BASE_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, document_context: documentContext }),
       credentials: "include",
     });
     const data = await resp.json();

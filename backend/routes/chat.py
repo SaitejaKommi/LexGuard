@@ -42,14 +42,23 @@ def chat():
     """
     body = request.get_json(silent=True) or {}
     raw_message = body.get("message", "")
+    incoming_session_id = body.get("session_id")
+    document_context = body.get("document_context", "")
 
     try:
         message = sanitize_chat_message(raw_message)
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "INVALID_INPUT"}), 400
 
-    doc_text = session.get("current_doc_text", "")
+    if incoming_session_id:
+        session["session_id"] = str(incoming_session_id)
+
+    doc_text = document_context or session.get("current_doc_text", "")
     clauses_summary = session.get("current_clauses_summary", "")
+    if document_context and not clauses_summary:
+        clauses_summary = document_context[:3000]
+        session["current_doc_text"] = document_context[:8000]
+        session["current_clauses_summary"] = clauses_summary
 
     if not doc_text:
         return jsonify({
@@ -69,8 +78,13 @@ def chat():
             doc_text, clauses_summary, history, message
         )
     except RuntimeError as exc:
-        logger.error("Chat failed: %s", exc)
-        return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
+        message_text = str(exc).lower()
+        if any(token in message_text for token in ("not initial", "not configured", "model")):
+            logger.warning("Chat failed; using fallback answer: %s", exc)
+            answer = gemini_service._fallback_chat(doc_text, clauses_summary, history, message)
+        else:
+            logger.error("Chat failed: %s", exc)
+            return jsonify({"error": str(exc), "code": "GEMINI_ERROR"}), 502
 
     try:
         mongodb_service.save_chat_message(session_id, "user", message)

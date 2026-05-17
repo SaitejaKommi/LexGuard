@@ -44,8 +44,21 @@ def _extract_text_from_pdf(data: bytes) -> tuple[str, int]:
     """
     try:
         import fitz  # PyMuPDF
-    except ImportError as exc:
-        raise ImportError("PyMuPDF (fitz) is not installed.") from exc
+    except ImportError:
+        # Best-effort fallback: attempt to extract readable text from raw PDF bytes.
+        # PDFs often contain text in parentheses or as long ASCII runs; capture those.
+        import re
+
+        decoded = data.decode("latin-1", errors="ignore")
+        pieces = re.findall(r"\(([^\)\n]{20,})\)", decoded)
+        if not pieces:
+            # Fallback to long printable runs
+            pieces = re.findall(r"[ -~]{40,}", decoded)
+        full_text = "\n\n".join(pieces).strip()
+        if not full_text:
+            # Give a clearer message for the caller to handle
+            raise ValueError("PyMuPDF (fitz) not installed and no readable text could be heuristically extracted from the PDF.")
+        return full_text, 1
 
     pages_text: list[str] = []
     with fitz.open(stream=data, filetype="pdf") as doc:

@@ -10,9 +10,9 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
-load_dotenv()
+load_dotenv(find_dotenv(usecwd=True))
 
 
 @dataclass
@@ -27,7 +27,14 @@ class Config:
     # Flask core
     # ------------------------------------------------------------------
     SECRET_KEY: str = field(
-        default_factory=lambda: os.environ.get("SECRET_KEY", "change-me-in-production")
+        default_factory=lambda: os.environ.get(
+            "SECRET_KEY", os.environ.get("FLASK_SECRET_KEY", "change-me-in-production")
+        )
+    )
+    FLASK_SECRET_KEY: str = field(
+        default_factory=lambda: os.environ.get(
+            "FLASK_SECRET_KEY", os.environ.get("SECRET_KEY", "change-me-in-production")
+        )
     )
     DEBUG: bool = field(
         default_factory=lambda: os.environ.get("DEBUG", "false").lower() == "true"
@@ -46,7 +53,7 @@ class Config:
                 "CORS_ORIGINS",
                 "http://localhost:3000,http://localhost:5500,http://localhost:5501,"
                 "http://localhost:5505,http://127.0.0.1:5500,http://127.0.0.1:5501,"
-                "http://127.0.0.1:5505",
+                "http://127.0.0.1:5505,null",
             ).split(",")
             if o.strip()
         ]
@@ -56,7 +63,10 @@ class Config:
     # MongoDB
     # ------------------------------------------------------------------
     MONGO_URI: str = field(
-        default_factory=lambda: os.environ.get("MONGO_URI", "")
+        default_factory=lambda: os.environ.get("MONGO_URI", os.environ.get("MONGODB_URI", ""))
+    )
+    MONGODB_URI: str = field(
+        default_factory=lambda: os.environ.get("MONGODB_URI", os.environ.get("MONGO_URI", ""))
     )
     MONGO_DB_NAME: str = field(
         default_factory=lambda: os.environ.get("MONGO_DB_NAME", "lexguard")
@@ -67,6 +77,13 @@ class Config:
     # ------------------------------------------------------------------
     GEMINI_API_KEY: str = field(
         default_factory=lambda: os.environ.get("GEMINI_API_KEY", "")
+    )
+
+    # ------------------------------------------------------------------
+    # Optional News API
+    # ------------------------------------------------------------------
+    NEWS_API_KEY: str = field(
+        default_factory=lambda: os.environ.get("NEWS_API_KEY", "")
     )
 
     # ------------------------------------------------------------------

@@ -67,6 +67,7 @@ async function translateClauseContent(lang) {
 // ---- Event Listener ----
 document.addEventListener("DOMContentLoaded", () => {
   const select = document.getElementById("lang-select");
+  if (!select) return;
   select.addEventListener("change", async () => {
     currentLang = select.value;
     applyStaticTranslations(currentLang);
